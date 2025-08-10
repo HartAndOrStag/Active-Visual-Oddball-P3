@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Active Visual Oddball P3</title>
+    <script src="https://unpkg.com/jspsych@8.2.1"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@2.1.0"></script>
+    <link href="https://unpkg.com/jspsych@8.2.1/css/jspsych.css" rel="stylesheet" type="text/css" />
+  </head>
+  <body></body>
+  <script>
+
+// initialize jsPsych
+const jsPsych = initJsPsych({
+    on_finish: function() {
+        jsPsych.data.displayData();
+    }
+});
+
+// create timeline 
+let timeline = [];
+
+// define set of letters to be displayed
+const letters = ['A', 'B', 'C', 'D', 'E'];
+
+// define number of trials to run
+const numTrials = 20;
+
+// select a random letter to be the target letter
+const targetLetter = jsPsych.randomization.sampleWithoutReplacement(letters, 1)[0];
+
+// define instructions
+const instructions = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `<p>Your target letter is: <strong>${targetLetter}</strong></p>
+               <p>Press <strong>'a'</strong> if you see the target letter.<br>
+               Press <strong>'l'</strong> for any other letter.</p>
+               <p>Press any key to begin.</p>`,
+};
+
+// and push instructions to timeline
+timeline.push(instructions);
+
+// define fixation trial to be played prior to actual trials
+const fixationTrial = {
+    type: jsPsychHtmlKeyboardResponse,
+    // stimulus displays a cross at center and a target letter reminder at top left
+    stimulus: ` 
+        <div style="position: absolute; top: 10px; left: 20px; font-size: 20px; color: gray;">
+            Target Letter: <strong>${targetLetter}</strong>
+        </div>
+        <div style="font-size: 32px; text-align: center; 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);"> + 
+        </div>
+    `,
+    // no inputs are taken
+    choices: "NO_KEYS", 
+    trial_duration: 2500, 
+};
+
+// and push fixation trial to timeline
+timeline.push(fixationTrial);
+
+// define previous letter to be excluded - i.e no sequential repeats
+let previousLetter = null;
+
+// define trails to run for length numTrials
+const trials = Array.from({ length: numTrials }, () => {
+
+    // logic to exclude sequential repeats
+    let possibleLetters = letters.filter(l => l !== previousLetter);
+    let letter = jsPsych.randomization.sampleWithReplacement(possibleLetters, 1)[0];
+    previousLetter = letter;
+
+    return {
+        type: jsPsychHtmlKeyboardResponse,
+        // stimulus displays a cross at center and a target letter reminder at top left
+        // each trial a random letter will be displayed at center for 250 ms, replacing the cross
+        stimulus: `
+        <div style="position: absolute; top: 10px; left: 20px; font-size: 20px; color: gray;">
+            Target Letter: <strong>${targetLetter}</strong>
+        </div>
+        <div id="letter-container" style="font-size: 56px; text-align: center; 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);"> ${letter} 
+        </div>
+        <div id="fixation-cross"style="font-size: 32px; text-align: center; 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); visibility: hidden;"> + 
+        </div>
+        `,
+        choices: ['a', 'l'],
+        trial_duration: 2250,  
+        response_ends_trial: false, 
+        // track what letter is displayed and if it is target
+        data: { letter: letter, target: letter === targetLetter },
+        // swap visibility of the letter and cross every 250 ms
+        on_load: function() {
+            setTimeout(() => {
+                document.getElementById("letter-container").style.visibility = "hidden";
+                document.getElementById("fixation-cross").style.visibility = "visible"; 
+            }, 250);
+        },
+        // track custom missed and incorrect metadata
+        on_finish: function(data) {
+        // if no response is given the trial will be considered missed
+        if (!data.response) { 
+            data.missed = true; 
+        // if the response does not correspond to correct input it will be considered incorrect
+        } else if ((data.target && data.response !== 'a') || (!data.target && data.response !== 'l')) {
+            data.incorrect = true;
+        }
+    }
+    };
+});
+
+// and push main trials to timeline
+timeline.push(...trials);
+
+// define end-screen summary
+const summary = {
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: function() {
+        const incorrectResponses = jsPsych.data.get().filter({incorrect: true}).count();
+        const missedResponses = jsPsych.data.get().filter({missed: true}).count();
+        return `<p>Complete.</p>
+                <p>You had <strong>${incorrectResponses}</strong> incorrect responses.</p>
+                <p>You missed <strong>${missedResponses}</strong> responses.</p>
+                <p>Press any key to finish.</p>`;
+    }
+};
+
+// and push summary to timeline
+timeline.push(summary);
+
+// run timeline
+jsPsych.run(timeline);
+  </script>
+</html>
